@@ -30,6 +30,11 @@ class Mesh():
 
                 # Normalize
                 self.vertex_normals = torch.nn.functional.normalize(self.vertex_normals)
+            
+            if self.vertex_normals is None or self.vertex_normals.shape[0] == 0:
+                print("Vertex normals not found, computing them.")
+                # Compute vertex normals
+                self.vertex_normals = self.compute_vertex_normals()
 
             if mesh.face_normals is not None:
                 self.face_normals = mesh.face_normals.to(device).float()
@@ -37,7 +42,29 @@ class Mesh():
                 # Normalize
                 self.face_normals = torch.nn.functional.normalize(self.face_normals)
 
+            if self.face_normals is None or self.face_normals.shape[0] == 0:
+                print("Face normals not found, computing them.")
+                # Compute face normals
+                tris = self.vertices[self.faces]
+                self.face_normals = torch.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
+                self.face_normals = torch.nn.functional.normalize(self.face_normals, dim=1)
+
+
+
         self.set_mesh_color(color)
+
+    def compute_vertex_normals(self):
+        normals = torch.zeros_like(self.vertices)
+        tris = self.vertices[self.faces]  # shape: (F, 3, 3)
+        face_normals = torch.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])  # shape: (F, 3)
+
+        # Accumulate face normals to vertices
+        for i in range(3):
+            normals.index_add_(0, self.faces[:, i], face_normals)
+
+        print("Vertex normals computed for normal.")
+        # Normalize per vertex
+        return torch.nn.functional.normalize(normals, dim=1)
 
     def standardize_mesh(self,inplace=False):
         mesh = self if inplace else copy.deepcopy(self)
