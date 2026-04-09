@@ -10,10 +10,12 @@ dependencies:
   - numpy=1.25
   - matplotlib=3.5.2
   - jupyter=1.0.0
+
   - pytorch=2.1.0
   - torchvision=0.16.0
   - torchaudio=2.1.0
   - pytorch-cuda=12.1
+
   - pip
   # - pip:
   #     - torch=2.1.0+cu121
@@ -21,5 +23,11 @@ dependencies:
   #     - torchaudio=2.1.0+cu121
   #     - -f https://download.pytorch.org/whl/cu121
   - pip:
-      - git+https://github.com/gkushalg01/CLIP.git@main
-      - git+https://github.com/gkushalg01/kaolin.git@master
+      - git+https://github.com/openai/CLIP.git
+      - kaolin==0.15.0 --find-links https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.1.0_cu121.html
+      # BLIP-2 dependencies
+      - transformers
+      - accelerate
+      - pillow
+      - sentencepiece
+      - timm

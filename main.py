@@ -17,6 +17,9 @@ from PIL import Image
 import argparse
 from pathlib import Path
 from torchvision import transforms
+from transformers import Blip2Processor, Blip2ForConditionalGeneration
+
+
 
 def run_branched(args):
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
@@ -30,7 +33,18 @@ def run_branched(args):
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
     
-    # Load CLIP model 
+    # --- Load BLIP-2 for image captioning ---
+    
+    # Pre-processes images for blip_model
+    blip_processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b")
+    
+    # Encodes image and generates caption
+    blip_model = Blip2ForConditionalGeneration.from_pretrained(
+        "Salesforce/blip2-opt-2.7b",
+        torch_dtype = torch.float16
+    ).to(device)
+
+    # --- Load CLIP model ---
     clip_model, preprocess = clip.load(args.clipmodel, device, jit=args.jit)
     
     # Adjust output resolution depending on model type 
@@ -160,6 +174,8 @@ def run_branched(args):
         encoded_image = clip_model.encode_image(img.unsqueeze(0))
         if args.no_prompt:
             norm_encoded = encoded_image
+
+        
 
     loss_check = None
     vertices = copy.deepcopy(mesh.vertices)
@@ -333,6 +349,39 @@ def run_branched(args):
             report_process(args, dir, i, loss, loss_check, losses, rendered_images)
 
     export_final_results(args, dir, losses, mesh, mlp, network_input, vertices)
+
+def caption_image(img_path):
+    img = Image.open(img_path).convert("RGB")
+    inputs = blip_processor(images=img, return_tensors="pt").to(device, torch.float16)
+
+    generated_ids = blip_model.generate(
+        **inputs,
+        max_new_tokens=30, # Max caption length
+        num_beams=5,
+        min_length=5,
+    )
+
+    caption = blip_processor.decode(generated_ids[0], skip_special_tokens=True)
+    return caption.strip()
+
+def get_style_embedding(image_path, user_text_prompt):
+    image = Image.open(image_path).convert("RGB")
+
+    # Get caption for image
+    image_caption = caption_image(image_path)
+    print(f"Auto-generated image caption: '{image_caption}'")
+
+    # Generate CLIP embeddings
+    with torch.no_grad():
+        image_input = preprocess(image).unsqueeze(0).to(device)
+        image_embed = clip_model.encode_image(image_input).float()
+
+def generate_odcr_vector(text_embed, image_embed):
+    # Project text content direction from image embedding
+    proj = torch.dot(image_embed, text_embed) * text_embed
+    style_embed = image_embed - proj
+
+    return style_embed
 
 
 def report_process(args, dir, i, loss, loss_check, losses, rendered_images):
