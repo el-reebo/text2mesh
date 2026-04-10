@@ -19,7 +19,6 @@ from pathlib import Path
 from torchvision import transforms
 from transformers import Blip2Processor, Blip2ForConditionalGeneration
 
-# Test
 
 def run_branched(args):
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
@@ -207,6 +206,7 @@ def run_branched(args):
             encoded_renders = clip_model.encode_image(clip_image)
             if not args.no_prompt:
                 loss = torch.mean(torch.cosine_similarity(encoded_renders, encoded_text))
+            # IMAGE ENCODER MISSING
 
         # Check augmentation steps
         if args.cropsteps != 0 and cropupdate != 0 and i != 0 and i % args.cropsteps == 0:
@@ -373,8 +373,37 @@ def get_style_embedding(image_path, user_text_prompt):
 
     # Generate CLIP embeddings
     with torch.no_grad():
+        # Whole image embedding
         image_input = preprocess(image).unsqueeze(0).to(device)
         image_embed = clip_model.encode_image(image_input).float()
+
+        # Image content embedding (using image caption)
+        content_tokens = clip.tokenize([image_caption]).to(device)
+        content_embed = clip_model.encode_text(content_tokens).float()
+
+        # User prompt embedding
+        prompt_tokens = clip.tokenize([user_text_prompt]).to(device)
+        prompt_embed = clip_model.encode_text(prompt_tokens).float()
+
+    # Perform L2 normalisation to get unit vectors
+    image_embed = image_embed / image_embed.norm(dim=-1, keepdim=True)
+    content_embed = content_embed / content_embed.norm(dim=-1, keepdim=True)
+    prompt_embed = prompt_embed / prompt_embed.norm(dim=-1, keepdim=True)
+
+    # Remove content embedding from image embedding
+    projection = (image_embed * content_embed).sum(dim=-1, keepdim=True) * content_embed
+    style_embed = image_embed - projection
+    style_embed = style_embed / style_embed.norm(dim=-1, keepdim=True)
+
+    # Combination of style and prompt embedding
+    lambda_style = 0.3
+    target_embed = prompt_embed + lambda_style * style_embed
+    target_embed = target_embed / target_embed.norm(dim=-1, keepdim=True)
+
+    return style_embed, image_caption, target_embed
+
+def compute_image_style_loss(encoded_renders, target_embed):
+    return -torch.mean(torch.sum(render_embed * target_embed, dim=-1))
 
 def generate_odcr_vector(text_embed, image_embed):
     # Project text content direction from image embedding

@@ -24,7 +24,7 @@ dependencies:
   #     - -f https://download.pytorch.org/whl/cu121
   - pip:
       - git+https://github.com/openai/CLIP.git
-      - kaolin==0.15.0 --find-links https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.1.0_cu121.html
+      - kaolin==0.15.0 -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.1.0_cu121.html
       # BLIP-2 dependencies
       - transformers
       - accelerate
