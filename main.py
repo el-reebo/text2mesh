@@ -19,7 +19,7 @@ from pathlib import Path
 from torchvision import transforms
 from transformers import Blip2Processor, Blip2ForConditionalGeneration
 
-
+# Test
 
 def run_branched(args):
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
