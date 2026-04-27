@@ -173,6 +173,8 @@ def run_branched(args):
         encoded_image = clip_model.encode_image(img.unsqueeze(0))
         if args.no_prompt:
             norm_encoded = encoded_image
+        else:
+            get_style_embedding(args.image, args.prompt)
 
         
 
@@ -403,7 +405,7 @@ def get_style_embedding(image_path, user_text_prompt):
     return style_embed, image_caption, target_embed
 
 def compute_image_style_loss(encoded_renders, target_embed):
-    return -torch.mean(torch.sum(render_embed * target_embed, dim=-1))
+    return -torch.mean(torch.sum(encoded_renders * target_embed, dim=-1))
 
 def generate_odcr_vector(text_embed, image_embed):
     # Project text content direction from image embedding
@@ -575,3 +577,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     run_branched(args)
+
+    

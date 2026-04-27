@@ -1,0 +1,31 @@
+name: text2meshV2
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - cython
+  - numpy=1.26.4        # <2 to satisfy opencv, >1.25 for everything else
+  - matplotlib=3.8.0    # >=3.7,<3.9 as per your working setup notes
+  - jupyter=1.0.0
+  - dharpa::jupyter-client  # <8 to satisfy kaolin 0.15.0
+  - pyzmq=24.0.1          # <25 to satisfy kaolin 0.15.0
+
+  - pytorch=2.1.0
+  - torchvision=0.16.0
+  - torchaudio=2.1.0
+  - pytorch-cuda=12.1
+
+  - pip
+  - pip:
+      - git+https://github.com/openai/CLIP.git
+      - kaolin==0.15.0 --find-links https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.1.0_cu121.html
+      - opencv-python==4.8.0.76   # last version with numpy<2 support
+      - transformers==4.46.3
+      - accelerate
+      - pillow
+      - sentencepiece
+      - timm
+      - ipykernel
