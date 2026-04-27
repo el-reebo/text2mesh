@@ -21,7 +21,7 @@ dependencies:
   - pip
   - pip:
       - git+https://github.com/openai/CLIP.git
-      - kaolin==0.15.0 --find-links https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.1.0_cu121.html
+      - kaolin==0.15.0 -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.1.0_cu121.html
       - opencv-python==4.8.0.76   # last version with numpy<2 support
       - transformers==4.46.3
       - accelerate
