@@ -202,7 +202,7 @@ def run_branched(args):
         style_embed, image_caption, target_embed = get_style_embedding(
             image_path=args.image, 
             user_text_prompt=prompt if args.prompt else "", 
-            lambda_style=0.3
+            lambda_style=args.lambda_style
         )
         print(f"Generated image caption: {image_caption}")
         
@@ -421,7 +421,7 @@ def caption_image(img_path):
     caption = blip_processor.decode(generated_ids[0], skip_special_tokens=True)
     return caption.strip()
 
-def get_style_embedding(image_path, user_text_prompt, lambda_style = 0.3):
+def get_style_embedding(image_path, user_text_prompt, lambda_style):
     image = Image.open(image_path).convert("RGB")
 
     # Get caption for image
@@ -564,7 +564,7 @@ if __name__ == '__main__':
     parser.add_argument('--promptlist', nargs="+", default=None)
     parser.add_argument('--normpromptlist', nargs="+", default=None)
     parser.add_argument('--image', type=str, default=None)
-    parser.add_argument('--lambda', type=float, default=0.3, help='Percentage of image style embedding used') 
+    parser.add_argument('--lambda_style', type=float, default=0.3, help='Percentage of image style embedding used') 
     parser.add_argument('--image_geo', action='store_true', default=True, help='Let image style infuence geometry')
     parser.add_argument('--output_dir', type=str, default='round2/alpha5')
     parser.add_argument('--traintype', type=str, default="shared")
@@ -635,12 +635,13 @@ if __name__ == '__main__':
     run_branched(args)
 
     # caption generation test
-    style_embed, image_caption, target_embed = get_style_embedding(
-        image_path='input_image/dj_cat.jpg',
-        user_text_prompt='A blue pear'
-    )
-    print(f"Generated caption: {image_caption}")
-    print(f"Style embedding: {style_embed.shape}")
-    print(f"Target embedding: {target_embed.shape}")
+    # style_embed, image_caption, target_embed = get_style_embedding(
+    #     image_path='lamp_watercolor_0_3/init_cluster.png',
+    #     user_text_prompt='A blue pear',
+    #     lambda_style = 0.3
+    # )
+    # print(f"Generated caption: {image_caption}")
+    # print(f"Style embedding: {style_embed.shape}")
+    # print(f"Target embedding: {target_embed.shape}")
 
     
