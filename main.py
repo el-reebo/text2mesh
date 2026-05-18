@@ -204,6 +204,10 @@ def run_branched(args):
             user_text_prompt=prompt if args.prompt else "", 
             lambda_style=args.lambda_style
         )
+        # Create file with reference image caption
+        with open(os.path.join(dir, image_caption), "w") as f:
+            f.write("")
+            
         print(f"Generated image caption: {image_caption}")
         
 
@@ -399,7 +403,9 @@ def run_branched(args):
 
 def caption_image(img_path):
     img = Image.open(img_path).convert("RGB")
-    prompt = "Question: Describe the main content of the image. Answer: "
+    prompt = (
+    "A descriptive caption of the image contents, without naming the artwork, painter, or style."
+    )
 
     inputs = blip_processor(images=img, text=prompt, return_tensors="pt").to(device, torch.float16)
     # inputs = blip_processor(images=img, return_tensors="pt").to(device)
