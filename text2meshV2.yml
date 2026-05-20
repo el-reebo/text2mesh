@@ -28,5 +28,5 @@ dependencies:
       - pillow
       - sentencepiece
       - timm
-      - ipykernel
+      - ipykernel==6.29.5
       - pymeshlab

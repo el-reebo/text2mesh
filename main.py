@@ -166,6 +166,10 @@ def run_branched(args):
     activate_scheduler = args.lr_decay < 1 and args.decay_step > 0 and not args.lr_plateau
     if activate_scheduler:
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optim, step_size=args.decay_step, gamma=args.lr_decay)
+    
+    # default value for normal embedding
+    norm_encoded = torch.zeros((1, 512), device=device)
+    
     if not args.no_prompt:
         if args.prompt:
             if isinstance(args.prompt, list):
@@ -194,21 +198,35 @@ def run_branched(args):
         # img = Image.open(args.image)
         # img = preprocess(img).to(device)
         # encoded_image = clip_model.encode_image(img.unsqueeze(0))
-        # if args.no_prompt:
-        #     norm_encoded = encoded_image
+
         # else:
         #     get_style_embedding(args.image, args.prompt)
 
-        style_embed, image_caption, target_embed = get_style_embedding(
-            image_path=args.image, 
-            user_text_prompt=prompt if args.prompt else "", 
-            lambda_style=args.lambda_style
-        )
-        # Create file with reference image caption
-        with open(os.path.join(dir, image_caption), "w") as f:
-            f.write("")
-            
-        print(f"Generated image caption: {image_caption}")
+        if args.style_embed:
+            # chosen_image_embed = target_embed # text embed and style embed blend
+            style_embed, image_caption, target_embed, pure_image_embed = get_style_embedding(
+                image_path=args.image, 
+                user_text_prompt=prompt if not args.no_prompt else "", 
+                lambda_style=args.lambda_style
+            )
+            print(f"Generated image caption: {image_caption}")
+            # Create file with reference image caption
+            with open(os.path.join(dir, image_caption), "w") as f:
+                f.write("")
+        else:
+            # chosen_image_embed = pure_image_embed
+            target_embed, pure_image_embed = get_img_text_blend_embedding(
+                image_path=args.image,
+                user_text_prompt=prompt if not args.no_prompt else "", 
+                lambda_style=args.lambda_style
+            )
+
+        if args.no_prompt and args.image_geo:
+            norm_encoded = target_embed
+
+    # Give norm_encoded correct dimensions    
+    if norm_encoded.dim() == 1:
+        norm_encoded = norm_encoded.unsqueeze(0)
         
 
     loss_check = None
@@ -256,7 +274,7 @@ def run_branched(args):
             ])
 
         if n_augs > 0:
-            loss = 0.0
+            loss = torch.tensor(0.0, device=device)
             for _ in range(n_augs):
                 augmented_image = augment_transform(rendered_images)
                 encoded_renders = clip_model.encode_image(augmented_image)
@@ -264,11 +282,14 @@ def run_branched(args):
                 # Normalise renders for consistency
                 encoded_renders = encoded_renders / encoded_renders.norm(dim=-1, keepdim=True)
 
+                # Case: Prompt is true
                 if not args.no_prompt:
+                    # Case: prompt + image
                     if args.prompt and args.image:
                         # loss using text prompt + image style embedding
                         loss += compute_loss(encoded_renders, target_embed)
 
+                    # Case: only prompt
                     elif args.prompt and not args.image:
                         # loss using only text prompt
                         if args.clipavg == "view":
@@ -280,20 +301,19 @@ def run_branched(args):
                                                                 encoded_text)
                         else:
                             loss -= torch.mean(torch.cosine_similarity(encoded_renders, encoded_text))
-                    elif args.image and not args.prompt:
-                        # loss using image style only
-                        loss += compute_loss(encoded_renders, style_embed)
+                    # elif args.image and not args.prompt:
+                    #     # loss using image style only
+                    #     loss += compute_loss(encoded_renders, style_embed)
                 else:
                     pass
                 
-                # Previous image implementation
-                # if args.image:
-                #     if encoded_image.shape[0] > 1:
-                #         loss -= torch.cosine_similarity(torch.mean(encoded_renders, dim=0),
-                #                                         torch.mean(encoded_image, dim=0), dim=0)
-                #     else:
-                #         loss -= torch.cosine_similarity(torch.mean(encoded_renders, dim=0, keepdim=True),
-                #                                         encoded_image)
+                # loss using only image
+                if args.image and args.no_prompt:
+                    if target_embed.shape[0] > 1:
+                        loss -= torch.cosine_similarity(torch.mean(encoded_renders, dim=0),
+                                                        torch.mean(target_embed, dim=0), dim=0)
+                    else:
+                        loss += compute_loss(encoded_renders, target_embed)
                    
         if args.splitnormloss:
             for param in mlp.mlp_normal.parameters():
@@ -308,7 +328,7 @@ def run_branched(args):
         # Normal augment transform
         # loss = 0.0
         if args.n_normaugs > 0:
-            normloss = 0.0
+            normloss = torch.tensor(0.0, device=device)
             for _ in range(args.n_normaugs):
                 augmented_image = normaugment_transform(rendered_images)
                 encoded_renders = clip_model.encode_image(augmented_image)
@@ -363,7 +383,7 @@ def run_branched(args):
                                                                 return_views=True,
                                                                 background=background)
             if args.n_normaugs > 0:
-                normloss = 0.0
+                normloss = torch.tensor(0.0, device=device)
                 ### avgview != aug
                 for _ in range(args.n_normaugs):
                     augmented_image = displaugment_transform(geo_renders)
@@ -372,10 +392,13 @@ def run_branched(args):
                         normloss -= torch.cosine_similarity(torch.mean(encoded_renders, dim=0),
                                                             torch.mean(norm_encoded, dim=0), dim=0)
                     else:
+                        print(f"encoded renders mean shape: {torch.mean(encoded_renders, dim=0, keepdim=True).shape}")
+                        print(f"norm encoded shape: {norm_encoded.shape}")
+
                         normloss -= torch.cosine_similarity(torch.mean(encoded_renders, dim=0, keepdim=True),
-                                                            norm_encoded)
+                                                            norm_encoded, dim=1)
                     if args.image and args.image_geo:
-                        loss += compute_loss(encoded_renders, target_embed)
+                        normloss += compute_loss(encoded_renders, target_embed)
                 # if not args.no_prompt:
                 normloss.backward(retain_graph=True)
         optim.step()
@@ -403,8 +426,13 @@ def run_branched(args):
 
 def caption_image(img_path):
     img = Image.open(img_path).convert("RGB")
+
+    # Augmented cropped image to prevent recognition of full pathes of art works
+    width, height = img.size
+    img = img.crop((width // 4, height // 4, 3 * width //4, 3 * height // 4))
+
     prompt = (
-    "A descriptive caption of the image contents, without naming the artwork, painter, or style."
+    "Question: Describe the main subjects and objects present in this image? Answer:"
     )
 
     inputs = blip_processor(images=img, text=prompt, return_tensors="pt").to(device, torch.float16)
@@ -418,7 +446,7 @@ def caption_image(img_path):
 
     generated_ids = blip_model.generate(
         **inputs,
-        max_new_tokens=20, # Max caption length
+        max_new_tokens=30, # Max caption length
         num_beams=1,
         min_length=5,
         do_sample=False
@@ -445,13 +473,16 @@ def get_style_embedding(image_path, user_text_prompt, lambda_style):
         content_embed = clip_model.encode_text(content_tokens).float()
 
         # User prompt embedding
-        prompt_tokens = clip.tokenize([user_text_prompt]).to(device)
-        prompt_embed = clip_model.encode_text(prompt_tokens).float()
+        if user_text_prompt == "":
+            prompt_embed = torch.zeros_like(image_embed)
+        else:
+            prompt_tokens = clip.tokenize([user_text_prompt]).to(device)
+            prompt_embed = clip_model.encode_text(prompt_tokens).float()
+            prompt_embed = prompt_embed / prompt_embed.norm(dim=-1, keepdim=True)
 
     # Perform L2 normalisation to get unit vectors
     image_embed = image_embed / image_embed.norm(dim=-1, keepdim=True)
     content_embed = content_embed / content_embed.norm(dim=-1, keepdim=True)
-    prompt_embed = prompt_embed / prompt_embed.norm(dim=-1, keepdim=True)
 
     # Remove content embedding from image embedding
     projection = (image_embed * content_embed).sum(dim=-1, keepdim=True) * content_embed
@@ -462,7 +493,31 @@ def get_style_embedding(image_path, user_text_prompt, lambda_style):
     target_embed = prompt_embed + lambda_style * style_embed
     target_embed = target_embed / target_embed.norm(dim=-1, keepdim=True)
 
-    return style_embed, image_caption, target_embed
+    return style_embed, image_caption, target_embed, image_embed
+
+def get_img_text_blend_embedding(image_path, user_text_prompt, lambda_style):
+    image = Image.open(image_path).convert("RGB")
+
+    with torch.no_grad():
+        # Whole image embedding
+        image_input = preprocess(image).unsqueeze(0).to(device)
+        image_embed = clip_model.encode_image(image_input).float()
+        # Perform L2 normalisation to get unit vectors
+        image_embed = image_embed / image_embed.norm(dim=-1, keepdim=True)
+
+        # User prompt embedding
+        if user_text_prompt == "":
+            prompt_embed = torch.zeros_like(image_embed)
+        else:
+            prompt_tokens = clip.tokenize([user_text_prompt]).to(device)
+            prompt_embed = clip_model.encode_text(prompt_tokens).float()
+            prompt_embed = prompt_embed / prompt_embed.norm(dim=-1, keepdim=True)
+
+     # Weighted combination of image and prompt embedding
+    target_embed = prompt_embed + lambda_style * image_embed
+    target_embed = target_embed / target_embed.norm(dim=-1, keepdim=True)  
+
+    return target_embed, image_embed 
 
 def compute_loss(encoded_renders, target_embed):
     return -torch.mean(torch.sum(encoded_renders * target_embed, dim=-1))
@@ -570,8 +625,9 @@ if __name__ == '__main__':
     parser.add_argument('--promptlist', nargs="+", default=None)
     parser.add_argument('--normpromptlist', nargs="+", default=None)
     parser.add_argument('--image', type=str, default=None)
-    parser.add_argument('--lambda_style', type=float, default=0.3, help='Percentage of image style embedding used') 
-    parser.add_argument('--image_geo', action='store_true', default=True, help='Let image style infuence geometry')
+    parser.add_argument('--lambda_style', type=float, default=0.3, help='Percentage of image embedding used') 
+    parser.add_argument('--image_geo', action='store_true', default=False, help='Let image style infuence geometry')
+    parser.add_argument('--style_embed', action='store_true', default=False, help='Utilise style embedding rather than pure image embedding')
     parser.add_argument('--output_dir', type=str, default='round2/alpha5')
     parser.add_argument('--traintype', type=str, default="shared")
     parser.add_argument('--sigma', type=float, default=10.0)
