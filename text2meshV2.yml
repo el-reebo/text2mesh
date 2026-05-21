@@ -30,3 +30,4 @@ dependencies:
       - timm
       - ipykernel==6.29.5
       - pymeshlab
+      - streamlit # gui
