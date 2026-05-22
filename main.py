@@ -253,15 +253,48 @@ def run_branched(args):
                                                                 return_views=True,
                                                                 background=background)
         # rendered_images = torch.stack([preprocess(transforms.ToPILImage()(image)) for image in rendered_images])
-    
+        
+        loss = torch.tensor(0.0, device=device, requires_grad=True)
+
         if n_augs == 0:
             clip_image = clip_transform(rendered_images)
             encoded_renders = clip_model.encode_image(clip_image)
 
+            # Case: prompt exists
             if not args.no_prompt:
-                loss = torch.mean(torch.cosine_similarity(encoded_renders, encoded_text))
+                # loss = torch.mean(torch.cosine_similarity(encoded_renders, encoded_text))
+
+                # Case: prompt + image
+                if args.prompt and args.image:
+                    # loss using text prompt + image style embedding
+                    loss = loss + compute_loss(encoded_renders, target_embed)
+                
+                # Case: only prompt
+                elif args.prompt and not args.image:
+                    # loss using only text prompt
+                    if args.clipavg == "view":
+                        if encoded_text.shape[0] > 1:
+                            loss = loss - torch.cosine_similarity(torch.mean(encoded_renders, dim=0),
+                                                            torch.mean(encoded_text, dim=0), dim=0)
+                        else:
+                            loss = loss - torch.cosine_similarity(torch.mean(encoded_renders, dim=0, keepdim=True),
+                                                            encoded_text)
+                    else:
+                        loss = loss - torch.mean(torch.cosine_similarity(encoded_renders, encoded_text))
+                # elif args.image and not args.prompt:
+                #     # loss using image style only
+                #     loss += compute_loss(encoded_renders, style_embed)
+            else:
+                pass
             
-            # IMAGE ENCODER MISSING
+            # Case: image only
+            if args.image and args.no_prompt:
+                if target_embed.shape[0] > 1:
+                    loss = loss - torch.cosine_similarity(torch.mean(encoded_renders, dim=0),
+                                                    torch.mean(target_embed, dim=0), dim=0)
+                else:
+                    loss = loss + compute_loss(encoded_renders, target_embed)
+
 
         # Check augmentation steps
         if args.cropsteps != 0 and cropupdate != 0 and i != 0 and i % args.cropsteps == 0:
@@ -274,7 +307,6 @@ def run_branched(args):
             ])
 
         if n_augs > 0:
-            loss = torch.tensor(0.0, device=device, requires_grad=True)
             for _ in range(n_augs):
                 augmented_image = augment_transform(rendered_images)
                 encoded_renders = clip_model.encode_image(augmented_image)
@@ -284,6 +316,7 @@ def run_branched(args):
 
                 # Case: Prompt is true
                 if not args.no_prompt:
+
                     # Case: prompt + image
                     if args.prompt and args.image:
                         # loss using text prompt + image style embedding
@@ -351,7 +384,7 @@ def run_branched(args):
                             normloss = normloss - normweight * torch.mean(
                                 torch.cosine_similarity(encoded_renders, norm_encoded))
                 if args.image and args.image_geo:
-                    normloss = loss + compute_loss(encoded_renders, target_embed)
+                    normloss = normloss + compute_loss(encoded_renders, target_embed)
                     # if encoded_image.shape[0] > 1:
                     #     loss -= torch.cosine_similarity(torch.mean(encoded_renders, dim=0),
                     #                                     torch.mean(encoded_image, dim=0), dim=0)
@@ -366,7 +399,7 @@ def run_branched(args):
             if args.splitcolorloss:
                 for param in mlp.mlp_rgb.parameters():
                     param.requires_grad = False
-            if not args.no_prompt:
+            if not args.no_prompt or (args.image and args.image_geo):
                 normloss.backward(retain_graph=True)
 
         # Also run separate loss on the uncolored displacements
@@ -395,7 +428,7 @@ def run_branched(args):
                         normloss = normloss - torch.cosine_similarity(torch.mean(encoded_renders, dim=0, keepdim=True),
                                                             norm_encoded, 
                                                             dim=1
-                                                            ).item()
+                                                            )
                     if args.image and args.image_geo:
                         normloss = normloss + compute_loss(encoded_renders, target_embed)
                 # if not args.no_prompt:

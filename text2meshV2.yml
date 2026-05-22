@@ -10,7 +10,7 @@ dependencies:
   - numpy=1.26.4        # <2 to satisfy opencv, >1.25 for everything else
   - matplotlib=3.8.0    # >=3.7,<3.9 as per your working setup notes
   - jupyter=1.0.0
-  - dharpa::jupyter-client  # <8 to satisfy kaolin 0.15.0
+  # - dharpa::jupyter-client  # <8 to satisfy kaolin 0.15.0
   - pyzmq=24.0.1          # <25 to satisfy kaolin 0.15.0
 
   - pytorch=2.1.0
@@ -29,5 +29,6 @@ dependencies:
       - sentencepiece
       - timm
       - ipykernel==6.29.5
+      - jupyter-client==7.4.9
       - pymeshlab
       - streamlit # gui
