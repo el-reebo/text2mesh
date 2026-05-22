@@ -9,7 +9,7 @@
 
 **Note:** The below installation will fail if run on something other than a CUDA GPU machine.
 ```
-conda env create --file text2mesh.yml
+conda env create -f text2meshV2.yml
 conda activate text2mesh
 ```
 If you experience an error installing kaolin saying something like `nvcc not found`, you may need to set your `CUDA_HOME` environment variable to the 11.3 folder i.e. `export CUDA_HOME=/usr/local/cuda-11.3`, then rerunning the installation. 
