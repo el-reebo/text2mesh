@@ -32,3 +32,4 @@ dependencies:
       - jupyter-client==7.4.9
       - pymeshlab
       - streamlit # gui
+      - protobuf>=3.20,<5
