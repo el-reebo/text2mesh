@@ -53,6 +53,55 @@ def toggle_row(icon, label, key):
         """, unsafe_allow_html=True)
         return st.toggle("", key=key, label_visibility="collapsed")
 
+def tooltip_label(label: str, tooltip: str):
+    st.markdown(f"""
+        <style>
+        .info-bubble {{
+            display: inline-block;
+            background-color: #e0e0e0;
+            color: #333;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            text-align: center;
+            font-size: 12px;
+            line-height: 18px;
+            cursor: default
+            position: relative;
+            margin-left: 6px;
+        }}
+
+        .info-bubble:hover .tooltip {{
+            visibility: visible;
+            opacity: 1;
+        }}
+
+        .tooltip {{
+            visibility: hidden;
+            opacity: 0;
+            width: 220px;
+            background-color: #333;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 10;
+            top: 24px;
+            left: 100px;
+            transition: opacity 0.2s ease-in-out;
+            font-size: 12px;
+        }}
+        </style>
+
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+            <span style="font-weight:600;">{label}</span>
+            <div class="info-bubble">i
+                <div class="tooltip">{tooltip}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
 st.markdown("""
     <style>
         [data-testid="stMainBlockContainer"]:first-child {
@@ -63,6 +112,10 @@ st.markdown("""
             flex: 0 0 350px !important;
             min-width: 250px !important;
             max-width: 350px !important;
+            border-radius: 8px !important;
+            border: 1px solid lightgrey;
+            padding: 1rem;
+
         }
 
         .left-col {
@@ -76,7 +129,7 @@ st.markdown("""
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: 10px;
+            margin-top: 5px;
         }
         .title-left {
             display: flex;
@@ -161,30 +214,37 @@ with left:
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Extract Image Style toggle
-    st.markdown("""
-        <div class="title-row">
-            <div class="title-left"  style="font-weight: 400; font-size: 0.95rem;">🎨 Extract Image Style</div>
-    """, unsafe_allow_html=True)
+    tooltip_label(
+        "Image Style",
+        "Use this on images you only want the aesthetic of e.g. colour and stroke style of a painting, colours used in a collage"
+    )
     extract_style_toggle = st.toggle("", key="extract_style_toggle", label_visibility="collapsed")
     st.markdown("</div>", unsafe_allow_html=True)
 
+
+
     # Image Affects Geo toggle
-    st.markdown("""
-        <div class="title-row">
-            <div class="title-left"  style="font-weight: 400; font-size: 0.95rem;">🌍 Image Affects Geo</div>
-    """, unsafe_allow_html=True)
+    tooltip_label(
+        "Image Affects Geo",
+        "Turn this on if you want the image to influence the bumpiness of the mesh"
+    )
     affects_geo_toggle = st.toggle("", key="affects_geo_toggle", label_visibility="collapsed")
     st.markdown("</div>", unsafe_allow_html=True)    
 
 
     # Blend lambda slider
+    tooltip_label(
+        "Blend",
+        "How much do you want to give text or image more influence on the style? Only works when image and text prompt are on"
+    )
     st.markdown("""
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <span style="font-size: 0.9rem;">📝</span>
-            <span style="font-weight: 500; font-size: 0.95rem;">Blend</span>
             <span style="font-size: 0.9rem;">📷</span>
         </div>
     """, unsafe_allow_html=True)
+
+    # <span style="font-weight: 500; font-size: 0.95rem;">Blend</span>
 
     blend_value = st.slider(
         "Blend",
@@ -215,22 +275,32 @@ with left:
 
     # advanced settings options
     if advanced_toggle:
-        number_iterations = st.number_input(
+        tooltip_label(
             "Number of Iterations",
+            "How many times the model repeats its improvement loop"
+        )
+        number_iterations = st.number_input(
+            "",
             min_value=1,
             max_value=10000,
             value=1000,
             step=1,
-            key="num_iterations"
+            key="num_iterations",
+            label_visibility="collapsed"
         )
 
-        number_augmentations = st.number_input(
+        tooltip_label(
             "Number of Augmentations",
+            "Controls how many times the mesh is randomly cropped, distorted and evaluated per training iteration"
+        )
+        number_augmentations = st.number_input(
+            "",
             min_value=0,
             max_value=100,
             value=1,
             step=1,
-            key="num_augmentations"
+            key="num_augmentations",
+            label_visibility="collapsed"
         )
 
 # Generate Button
@@ -282,11 +352,12 @@ with left:
         lmda = st.session_state.blend_slider
         # st.write(f"Lambda value: {lmda}")
 
-        n_iter = st.session_state.num_iterations
-        # st.write(f"n_iterations: {n_iter}")
+        if advanced_toggle:
+            n_iter = st.session_state.num_iterations
+            # st.write(f"n_iterations: {n_iter}")
 
-        n_augs = st.session_state.num_augmentations
-        # st.write(f"n_augmentations: {n_augs}")
+            n_augs = st.session_state.num_augmentations
+            # st.write(f"n_augmentations: {n_augs}")
 
         # Create progress bar
         progress_bar = st.progress(0)
@@ -341,6 +412,7 @@ with left:
 
         mp4_path = build_video(output_dir, n_iter)
 
+        preview_path = os.path.join(output_dir, "final_cluster.png")
 
         # --- Right Side Column ---
         with right:
@@ -348,9 +420,26 @@ with left:
             st.subheader("Model Preview")
             if mp4_path and os.path.exists(mp4_path):
                 with open(mp4_path, "rb") as f:
-                    st.video(f.read())
+                    video_bytes = f.read()
+
+                st.video(video_bytes)
             else:
                 st.info("Model will be displayed here once generated")
+
+            if os.path.exists(preview_path):
+                st.image(preview_path, caption="Preview", use_column_width=True)
+            else:
+                st.markdown("""
+                <div style="
+                    width: 70%;
+                    height: 300px;
+                    border-radius: 8px;
+                    background-color: lightgrey;
+                    opacity: 0.6;
+                ">
+                    Model preview will be shown here
+                </div>
+                """, unsafe_allow_html=True)
             
             # error output
             if stderr:
