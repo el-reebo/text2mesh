@@ -332,7 +332,7 @@ with left:
             with open(image_path, "wb") as f:
                 f.write(uploaded_image.getbuffer())
 
-            st.success(f"Image saved to: {image_path}")
+            # st.success(f"Image saved to: {image_path}")
         elif image_toggle:
             image_path = None
 
