@@ -33,3 +33,4 @@ dependencies:
       - pymeshlab
       - streamlit # gui
       - protobuf>=3.20,<5
+      - pyvista
